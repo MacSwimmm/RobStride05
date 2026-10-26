@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RobStride Console · 关节电机控制台</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="RobStride 首页"><span class="brand-mark"><i></i><i></i><i></i></span><span>ROBSTRIDE<small>MOTION CONSOLE</small></span></a>
+  <div class="workspace-label">工作空间 <span>01</span></div>
+  <nav aria-label="主导航">
+    <button class="nav-item active" data-view="control"><span class="nav-icon">⌘</span>电机控制<span class="nav-key">01</span></button>
+    <button class="nav-item" data-view="telemetry"><span class="nav-icon">∿</span>数据观测<span class="nav-key">02</span></button>
+    <button class="nav-item" data-view="diagnostics"><span class="nav-icon">⊞</span>通信诊断<span class="nav-key">03</span></button>
+    <button class="nav-item" data-view="led"><span class="nav-icon">☀</span>灯带控制<span class="nav-key">04</span></button>
+    <button class="nav-item" data-view="guide"><span class="nav-icon">≡</span>使用指南<span class="nav-key">05</span></button>
+  </nav>
+  <div class="sidebar-device"><div class="tiny-label">当前关节 / JOINT</div><div class="device-name"><span class="device-symbol">◎</span><div>RobStride 05<small>STM32H743 · RTOS</small></div></div><div class="device-meta"><span>ID <b>127 / 126</b></span><span>CAN <b>1 Mbps</b></span></div><div class="device-status"><span class="dot" id="sidebar-dot"></span><span id="sidebar-state">未连接设备</span></div></div>
+  <div class="sidebar-bottom"><span class="square-dot"></span> 本地工作台 <button id="exit" class="text-button" title="退出上位机并释放调试器">退出 ⏻</button><span>V2.0</span></div>
+</aside>
+<div class="app-shell">
+  <header class="topbar"><div class="breadcrumb">工作空间 <span>/</span> RobStride 05 <span>/</span> <b id="crumb">电机控制</b></div><div class="top-actions"><span class="local-tag">LOCAL ONLY</span><span id="clock">--:--:--</span></div></header>
+  <main>
+    <section class="page-intro"><div><div class="eyebrow"><span></span> PRECISION IN MOTION</div><h1 id="page-title">让每一次转动，<em>尽在掌握。</em></h1><p id="page-description">从连接到控制，实时了解你的每一个关节。</p></div><div class="intro-right"><div class="badge" id="connection-badge"><span class="dot"></span>设备未连接</div><span class="intro-model">RS05 / DUAL MOTOR</span></div></section>
+    <section class="connection-strip" aria-label="设备连接"><span class="connection-label"><span class="small-icon">⇄</span> 设备连接</span><div class="select-wrap"><label class="sr-only" for="probe">SWD 调试器</label><select id="probe"><option value="">选择 SWD 调试器</option></select></div><button id="refresh" class="icon-button" title="刷新调试器" aria-label="刷新调试器">↻</button><div class="transport"><span class="dot green"></span>SWD <span>/</span> CMSIS-DAP · ST-Link</div><button id="connect" class="button primary">连接设备 <span>↗</span></button></section>
+    <div class="notice" id="notice" role="status"><span>ⓘ</span><span id="notice-text">先在 Keil 中运行固件并退出 Debug，再连接调试器。连接不会自动使能电机。</span></div>
+
+    <section class="dual-panel panel" aria-label="双电机选择和状态">
+      <div class="panel-heading"><h2>双电机独立控制</h2><button id="stop-all" class="button danger">■ 两台全部失能 <kbd>Esc</kbd></button></div>
+      <div class="motor-cards"><button id="select-motor-0" class="motor-card selected" data-motor="0"><strong>电机 1 · ID 127 / 0x7F</strong><span id="summary-0">等待连接</span></button><button id="select-motor-1" class="motor-card" data-motor="1"><strong>电机 2 · ID 126 / 0x7E</strong><span id="summary-1">等待连接</span></button></div>
+      <p id="selected-label" class="green-text">当前控制：电机 1。下方参数、命令和曲线均对应选中电机。</p>
+      <details id="setup-details"><summary>首次接入：两个默认 ID 电机的配置流程</summary>
+        <p>两台同 ID 时无法独立控制。先点击“两台全部失能”，断电后从总线断开电机 1，仅接入待设为电机 2 的那一台，再给它供电。</p>
+        <label class="confirm-row"><input type="checkbox" id="isolated-confirmed"><span>当前 CAN 总线上只接通待修改的这一台，原 ID 为 127。允许将其 ID 改为 126。</span></label>
+        <button id="change-id" class="button secondary">单电机改 ID：127 → 126</button>
+        <p>等待日志“配置完成”后，断电并接回两台，再重新上电。确认以下两张卡分别在线，完成身份核对后才能准备和使能。</p>
+        <label class="confirm-row"><input type="checkbox" id="pair-confirmed"><span>两台已分别设置为 127、126，均已接回总线，且已经固定。</span></label>
+        <button id="verify-pair" class="button secondary">核对两台身份并开放独立控制</button><span id="pair-state" class="subtle">尚未核对</span>
+        <p>每次 MCU 重启都需重新核对。改 ID 需要真实隔离另一台；软件无法证明同 ID 电机的数量。已设置不同 ID 时直接核对，无需再次改 ID。</p>
+      </details>
+    </section>
+
+    <div id="view-control" class="view">
+      <div class="main-grid">
+        <section class="panel control-panel"><div class="panel-heading"><div><span class="section-index">01 /</span><h2>运动控制</h2></div><span class="chip">速度模式</span></div>
+          <div class="workflow"><span id="step1"><b>1</b>准备</span><i></i><span id="step2"><b>2</b>使能</span><i></i><span id="step3"><b>3</b>运行</span></div>
+          <div class="run-mode-row"><span>运行方式</span><b>持续运行 · 直到停止</b><span id="run-status">等待开始</span></div>
+          <div class="target-head"><label for="target">目标速度</label><div class="segmented" aria-label="速度单位"><button class="selected" data-unit="rad">rad/s</button><button data-unit="rpm">rpm</button></div></div>
+          <div class="target-input"><button class="stepper" id="minus" aria-label="减小目标速度">−</button><div><input id="target" type="number" min="-33" max="33" step="any" value="1" aria-label="目标速度"><span id="target-unit">rad/s</span></div><button class="stepper" id="plus" aria-label="增大目标速度">+</button></div>
+          <label for="speed-slider" class="sr-only">速度滑块</label><input id="speed-slider" class="speed-slider" type="range" min="-33" max="33" step="0.01" value="1"><div class="range-labels"><span id="min-speed">−33.00</span><span>0</span><span id="max-speed">+33.00</span></div><div class="control-note" id="speed-range-note">速度模式范围：±33 rad/s / ±315.13 rpm；加速度决定提速时间。</div>
+          <div class="presets"><span>快速设置</span><button data-speed="-1">反转 −1</button><button data-speed="0">零速</button><button data-speed="1">正转 +1</button></div>
+          <div class="divider"></div><div class="limits-title"><h3>运行限制</h3><span>失能后准备时生效</span></div>
+          <div class="limit-grid"><label>速度上限<div class="number-field"><input id="speed-limit" type="number" min="0.01" max="33" step="0.1" value="33"><span>rad/s</span></div></label><label>相电流限制<div class="number-field"><input id="current-limit" type="number" min="0.01" max="11" step="0.1" value="2.4"><span>A</span></div></label><label>加速度<div class="number-field"><input id="accel-limit" type="number" min="0.01" max="150" step="1" value="20"><span>rad/s²</span></div></label></div>
+          <label class="confirm-row"><input id="confirmed" type="checkbox"><span>已确认电机固定、空载，接线与供电正常</span></label>
+          <label class="confirm-row compatibility-note hidden" id="compatibility-note"><input id="compatibility-confirmed" type="checkbox"><span>旧固件兼容：电机拒绝 CAN 超时参数，未验证 CAN 断线自停。已确保可立即断电；接受此限制后使能。</span></label>
+          <div class="command-row"><button class="button secondary" id="prepare">1. 准备</button><button class="button secondary" id="enable">2. 使能</button><button class="button primary" id="run">运行 <span>▶</span></button></div>
+          <div class="stop-row"><button class="button secondary" id="stop">Ⅱ &nbsp; 减速停止</button><button class="button danger" id="disable">■ &nbsp; 选中电机失能</button></div>
+          <div class="control-note" id="run-note">一次下发，持续保持速度；修改后点击应用。关闭页面不会停止，结束请点击减速停止或立即失能。</div>
+        </section>
+        <section class="panel joint-panel"><div class="panel-heading"><div><span class="section-index">02 /</span><h2>关节状态</h2></div><span id="motor-badge" class="badge small"><span class="dot"></span>等待反馈</span></div>
+          <div class="joint-visual"><div class="visual-grid"></div><span class="axis-label top">Y +</span><span class="axis-label right">X +</span><svg class="joint-svg" viewBox="0 0 360 300" aria-label="关节位置示意图"><defs><radialGradient id="bodyGrad"><stop offset="0" stop-color="#282e2d"/><stop offset=".72" stop-color="#151a18"/><stop offset="1" stop-color="#303734"/></radialGradient><linearGradient id="armGrad"><stop stop-color="#58675e"/><stop offset=".5" stop-color="#b1bdb5"/><stop offset="1" stop-color="#434e47"/></linearGradient></defs><g transform="translate(180 150)"><circle class="orbit" r="119"/><circle class="orbit ticks" r="110"/><path d="M-90 -90 H-110 V-70 M90 -90 H110 V-70 M-90 90 H-110 V70 M90 90 H110 V70" class="brackets"/><ellipse cy="22" rx="79" ry="76" fill="#080b09"/><circle r="77" fill="url(#bodyGrad)" stroke="#68776e" stroke-width="1"/><circle r="65" fill="none" stroke="#343e37" stroke-width="9"/><circle r="57" fill="#111713" stroke="#7b9182"/><g class="bolts" fill="#181f1b" stroke="#9faea4"><circle cx="0" cy="-68" r="3"/><circle cx="59" cy="-34" r="3"/><circle cx="59" cy="34" r="3"/><circle cx="0" cy="68" r="3"/><circle cx="-59" cy="34" r="3"/><circle cx="-59" cy="-34" r="3"/></g><g id="joint-arm"><rect x="-17" y="-105" width="34" height="112" rx="10" fill="url(#armGrad)" stroke="#7c8f80"/><rect x="-8" y="-96" width="16" height="59" rx="6" fill="#111914" stroke="#3f4e44"/><circle cy="-84" r="3" fill="#2bef91"/><circle r="34" fill="#151e18" stroke="#91a499"/><circle r="24" fill="#202c23" stroke="#465a4b"/><circle r="11" fill="#0c120e" stroke="#50e68b"/><path d="M-4 -6 H4 V6 H-4 Z" fill="#405747"/></g><circle cy="-119" r="3" fill="#36ed91"/></g></svg><div class="visual-caption"><span class="green-text">◎</span> RS05<span>位置示意 · 非三维实测</span></div></div>
+          <div class="joint-position"><span>关节位置</span><strong id="position">—<small>rad</small></strong><span id="position-deg">等待有效反馈</span></div>
+          <div class="status-details"><div><span>应用状态</span><b id="app-state">—</b></div><div><span>反馈年龄</span><b id="feedback-age">— ms</b></div><div><span>电机 ID</span><b id="motor-id">0x7F</b></div><div><span>快照一致性</span><b id="coherent">—</b></div></div>
+        </section>
+      </div>
+      <section class="metrics" aria-label="实时测量"><article><div><span class="metric-icon">∿</span>实际速度<span>rad/s</span></div><strong id="velocity">—</strong><small>目标 <b id="applied">—</b> rad/s（斜坡后）</small><svg viewBox="0 0 110 28" class="spark" id="spark-speed"></svg></article><article><div><span class="metric-icon">↻</span>输出力矩<span>N·m</span></div><strong id="torque">—</strong><small>电机反馈 · 非相电流</small></article><article><div><span class="metric-icon">ϟ</span>相电流 Iq<span>A</span></div><strong id="current">—</strong><small id="current-age">等待参数读回</small></article><article><div><span class="metric-icon">⊥</span>电机温度<span>°C</span></div><strong id="temperature">—</strong><small>母线电压 <b id="voltage">—</b> V</small></article></section>
+    </div>
+
+    <section class="panel chart-panel" id="chart-section"><div class="panel-heading"><div><span class="section-index">03 /</span><h2>实时曲线</h2><span class="subtle">最近 30 秒</span></div><div class="chart-actions"><label><input type="checkbox" id="show-target" checked><span class="legend-line"></span>目标</label><label><input type="checkbox" id="show-actual" checked><span class="legend-line actual"></span>实际</label><label class="sr-only" for="chart-metric">曲线指标</label><select id="chart-metric"><option value="velocity_rad_s">速度 · rad/s</option><option value="position_rad">位置 · rad</option><option value="torque_nm">力矩 · N·m</option><option value="current_a">相电流 · A</option><option value="temperature_c">温度 · °C</option><option value="bus_voltage_v">母线电压 · V</option></select><button id="pause-chart" class="icon-button" title="暂停曲线" aria-label="暂停曲线">Ⅱ</button><button id="export" class="text-button">↓ 导出 CSV</button></div></div><div class="chart-wrap"><canvas id="chart" aria-label="实时反馈曲线"></canvas><div class="chart-empty" id="chart-empty"><span>∿</span><b>等待真实数据</b><small>连接设备后，曲线将在这里实时呈现</small></div></div><div class="chart-footer"><span><span class="dot green"></span> 真实反馈采集 <b id="sample-rate">0</b> 点</span><span id="chart-status">尚未连接 · 不生成模拟数据</span></div></section>
+
+    <section id="view-diagnostics" class="panel diagnostics-panel view hidden"><div class="panel-heading"><div><span class="section-index">04 /</span><h2>通信与固件诊断</h2></div><span class="chip">SWD / CAN</span></div><div class="diagnostic-grid" id="diagnostic-grid"></div><div class="identity-block"><h3>固件身份</h3><p id="firmware-path">读取中</p><code id="firmware-hash">—</code><p>连接会逐段比较 Flash 与 AXF。SWD 不暂停、不复位 CPU；控制写入对应电机命令区；仅在首次配置入口显式请求修改 CAN ID，不修改零点或协议。</p></div><button id="clear-fault" class="button secondary">请求清错 / 停止</button><span class="subtle clear-hint">先排除故障原因，再请求清错；不会自动恢复运动。</span></section>
+
+    <section id="view-guide" class="panel guide-panel view hidden"><div class="panel-heading"><div><span class="section-index">04 /</span><h2>从连接到第一次转动</h2></div><span class="chip">QUICK START</span></div><div class="guide-grid"><article><b>01</b><h3>连接现有硬件</h3><p>使用当前接好的 CMSIS-DAP / ST-Link。PC → SWD → H743 → CAN → RS05。无需额外串口，也不使用 COM5。</p></article><article><b>02</b><h3>运行并释放调试器</h3><p>在 Keil 中运行匹配固件，退出 Debug。不要同时让 Keil 与上位机占用探针。选择设备并点击连接。</p></article><article><b>03</b><h3>准备，再使能</h3><p>确认电机固定、空载和电源正常。速度可调至 ±33 rad/s（约 ±315 rpm），默认相电流 2.4 A、加速度 20 rad/s²，逐步点击准备、使能。</p></article><article><b>04</b><h3>低速验证反馈</h3><p>设置目标速度（正数正转、负数反转），点击运行。滑块只编辑目标，不立即发出运动命令。一次运行指令持续有效；修改速度后需再次点击应用，无需定时续发。</p></article></div><div class="guide-note"><b>停止方式</b><p>减速停止：按加速度降到零，保持使能。选中电机失能；Esc 两台全部失能：向固件请求失能，需新反馈确认；不能替代断电或机械急停。关闭页面不会停止运动。主动断开连接或退出上位机会请求失能；服务被强制终止或探针突然断开时，H743 中的速度仍可能持续有效，需重新连接后停止或直接断电。本电机拒绝 CAN 超时参数，未验证电机侧断线自停。</p></div><div class="guide-note"><b>当前工程能力</b><p>速度控制与位置、力矩、温度、电流、电压观测。位置和力矩仅反馈，不提供对应控制模式。电机掉线、过期或快照不一致时显示无效；CAN ACK 不代表电机已在线或已转动。</p></div></section>
+
+    <section class="panel log-panel" id="log-section"><div class="panel-heading"><div><span class="section-index">⌁ /</span><h2>事件日志</h2><span class="subtle" id="log-count">0 条事件</span></div><button class="text-button" id="copy-log">复制日志 ↗</button></div><div class="logs" id="logs" aria-live="polite"></div></section>
+    <footer><span>ROBSTRIDE CONSOLE <span class="footer-slash">/</span> 让运动清晰可见</span><span><span class="dot" id="footer-dot"></span><span id="footer-status">等待设备连接</span><span class="footer-slash">/</span> H743 RTOS · 双电机 CAN</span></footer>
+  </main>
+</div>
+<div class="toast hidden" id="toast" role="alert"></div>
+<script src="/app.js"></script>
+<script src="/led.js"></script>
+</body></html>
